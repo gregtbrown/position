@@ -21,10 +21,36 @@
        window.addEventListener('load', startup, true);
 
        var posCount = 0;
+       var running = false;
+       var watchId;
 
        function startup()
        {
-         document.getElementById('startTrack').addEventListener('click', run);
+         document.getElementById('startTrack').addEventListener('click', toggleGps);
+       }
+
+       function toggleGps()
+       {
+         if ( !running )
+         {
+           running = true;
+           run();
+           return;
+         }
+
+         if ( watchId )
+         {
+           navigator.geolocation.clearWatch(watchId);
+           watchId = null;
+           document.getElementById('startTrack').innerHTML = 'Start GPS';
+           updatePosition('');
+         }
+         else
+         {
+           watchId = locationWatcher(updatePosition);
+           document.getElementById('startTrack').innerHTML = 'Stop GPS';
+           updatePosition('waiting for location...');
+         }
        }
 
        async function run()
@@ -45,8 +71,8 @@
            document.getElementById('running').innerHTML = 'Interval Count: ' + count++;
          }, 1000);
 
-         if ("geolocation" in navigator)
-           locationWatcher(updatePosition);
+         if ( 'geolocation' in navigator )
+           toggleGps();
          else
            updatePosition('Geolocation API is NOT available');
 
@@ -77,13 +103,18 @@
          //   heading: degrees CW from north (null if speed == 0)
          //   accuracy: meters
 
-         document.getElementById('posCount').innerHTML = 'Position updates: ' + ++posCount;
-
          var str;
          if ( typeof(pos) == "string" )
+         {
            str = pos;
+           document.getElementById('posCount').innerHTML = '';
+         }
          else
+         {
            str = `timestamp: ${pos.timestamp}<br>lat: ${pos.coords.latitude}<br>lng: ${pos.coords.longitude}<br>heading: ${pos.coords.heading}<br>speed: ${pos.coords.speed}<br>altitude: ${pos.coords.altitude}<br>accuracy: ${pos.coords.accuracy}<br>altitudeAccuracy: ${pos.coords.altitudeAccuracy}`;
+           document.getElementById('posCount').innerHTML = 'Position updates: ' + ++posCount;
+         }
+
          document.getElementById('position').innerHTML = str;
        }
 
@@ -92,13 +123,13 @@
          const watchID = navigator.geolocation.watchPosition(
            function(position)
            {
-             console.log('location:', position);
+             //console.log('location:', position);
              updater(position);
            },
            function on_error(error)
            {
              var err = 'Error (' + error.code + ') getting position: ' + error.message;
-             console.log(err);
+             //console.log(err);
              updater(err);
            },
            {
@@ -129,11 +160,11 @@
 
   <body>
     <div id="title">Position Test</div>
-    <button id="startTrack">Allow Location Access</button>
+    <button id="startTrack">Start GPS</button>
     <div id="running"></div>
     <div id="lock"></div>
     <div id="posCount"></div>
-    <div id="position">waiting for location...</div>
+    <div id="position"></div>
   </body>
 </html>
     
