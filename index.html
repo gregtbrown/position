@@ -27,18 +27,45 @@
        function startup()
        {
          document.getElementById('startTrack').addEventListener('click', toggleGps);
-         document.getElementById('share').addEventListener('click', share);
+
+         document.getElementById('map').addEventListener('click', showOnMap);
+
+         // TODO: only available in https
+         // otherwise navigator.share is not a function
+         if ( 'share' in navigator )
+           document.getElementById('share').addEventListener('click', share);
+         else
+           document.getElementById('share').style.visibility = 'hidden';
+       }
+
+       function linker(url, type = 'text/plain')
+       {
+         var link = document.getElementById('linker');
+
+         link.target = '_blank';
+         link.href = url;
+         link.click();  // simulate clicking the link
+
+         setTimeout(function() { URL.revokeObjectURL(link.href); }, 0);
+       }
+
+       function showOnMap()
+       {
+         linker('https://maps.apple.com/?daddr=37.3318,-122.0311&dirflg=d');
        }
 
        async function share()
        {
+         // see: https://developer.mozilla.org/en-US/docs/Web/API/Navigator/share
+         // can also share a url or files
+
          var data = {title: 'share some text', text: 'shared text'};
 
          try
          {
-           //if ( !navigator.canShare(data) )
-           //  document.getElementById('shareRes').textContent = "can't share data";
-           //else
+           if ( !navigator.canShare(data) )
+             document.getElementById('shareRes').textContent = "can't share data";
+           else
            {
              await navigator.share(data);
              document.getElementById('shareRes').textContent = "data shared successfully";
@@ -46,7 +73,8 @@
          }
          catch (err)
          {
-           document.getElementById('shareRes').textContent = `Error: ${err}`;
+           // get an AbortError error if user cancels
+           document.getElementById('shareRes').textContent = `Error: code: ${err.code}, name: ${err.name}, msg: ${err.message}`;
          }
        }
 
@@ -180,12 +208,14 @@
   </head>
 
   <body>
+    <a href="" id="linker" style="display:none"></a>
     <div id="title">Position Test</div>
     <button id="startTrack">Start GPS</button>
     <div id="running"></div>
     <div id="lock"></div>
     <div id="posCount"></div>
     <div id="position"></div>
+    <button id="map">Show on Map</button>
     <button id="share">Share</button>
     <div id="shareRes"></div>
   </body>
