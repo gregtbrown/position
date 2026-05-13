@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<!-- @@COPYRIGHT -->
+<html>
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    <!-- you can also inject a whole other script (everything is global)
+    <script>
+       function otherLocationService(updater)
+       {
+         var data = {timestamp: 1, coords: {latitude: 2, longitude: 3, heading: 4, speed: 5}};
+         updater(data);
+       }
+    </script>
+    -->
+
+    <script>
+
+       // wait for everything to load
+       window.addEventListener('load', run, true);
+
+       var posCount = 0;
+
+       async function run()
+       {
+         // TODO: add some other check for a location service that calls updatePosition()
+         // or inject another script as above
+/*
+         if ( typeof(otherLocationService) != 'undefined' )
+           otherLocationService(updatePosition);
+         else if ( navigator.geolocation )
+           locationWatcher(updatePosition);
+*/
+         // so we know the js is running
+         var count = 0;
+         setInterval(function()
+         {
+           document.getElementById('running').innerHTML = 'Interval Count: ' + count++;
+         }, 1000);
+
+         if ( navigator.wakeLock )
+         {
+           try
+           {
+             var lock = await navigator.wakeLock.request('screen');
+             document.getElementById('lock').innerHTML = 'Screen Lock acquired';
+             lock.addEventListener("release", () =>
+             {
+               document.getElementById('lock').innerHTML = 'Screen Lock released';
+             });
+           }
+           catch(err)
+           {
+             document.getElementById('lock').innerHTML = `${err.name}: ${err.message}`;
+           }
+         }
+
+       }
+
+       function updatePosition(pos)
+       {
+         // note:
+         //   speed: meters/sec
+         //   altitude: meters
+         //   heading: degrees CW from north (null if speed == 0)
+         //   accuracy: meters
+
+         document.getElementById('posCount').innerHTML = 'Position updates: ' + ++posCount;
+
+         var str;
+         if ( typeof(pos) == "string" )
+           str = pos;
+         else
+           str = `timestamp: ${pos.timestamp}<br>lat: ${pos.coords.latitude}<br>lng: ${pos.coords.longitude}<br>heading: ${pos.coords.heading}<br>speed: ${pos.coords.speed}<br>altitude: ${pos.coords.altitude}<br>accuracy: ${pos.coords.accuracy}<br>altitudeAccuracy: ${pos.coords.altitudeAccuracy}`;
+         document.getElementById('position').innerHTML = str;
+       }
+
+       function locationWatcher(updater)
+       {
+         const watchID = navigator.geolocation.watchPosition(
+           function(position)
+           {
+             console.log('location:', position);
+             updater(position);
+           },
+           function on_error(error)
+           {
+             var err = 'Error (' + error.code + ') getting position: ' + error.message;
+             console.log(err);
+             updater(err);
+           },
+           {
+             //maximumAge: 5 * 1000,  // max cache time
+             //timeout: 60 * 1000,
+             timeout: 30 * 1000,
+             maximumAge: 0,            // Force fresh data
+             enableHighAccuracy: true,
+           }
+         );
+         
+         return watchID;
+       }
+
+    </script>
+
+    <style>
+       * {
+           font-family: sans-serif;
+           font-size: 20px;
+           box-sizing: border-box;
+           padding: 0;
+           margin: 10px;
+       }
+    </style>
+
+  </head>
+
+  <body>
+    <div id="title">Position Test</div>
+    <div id="running"></div>
+    <div id="lock"></div>
+    <div id="posCount"></div>
+    <div id="position">waiting for location...</div>
+  </body>
+</html>
+    
