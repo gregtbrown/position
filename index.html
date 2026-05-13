@@ -18,12 +18,18 @@
     <script>
 
        // wait for everything to load
-       window.addEventListener('load', run, true);
+       window.addEventListener('load', startup, true);
 
        var posCount = 0;
 
-       async function run()
+       function startup()
        {
+         document.getElementById('startTrack').addEventListener('click', run);
+       }
+
+       async function run()
+       {           
+
          // TODO: add some other check for a location service that calls updatePosition()
          // or inject another script as above
 /*
@@ -38,6 +44,11 @@
          {
            document.getElementById('running').innerHTML = 'Interval Count: ' + count++;
          }, 1000);
+
+         if ("geolocation" in navigator)
+           locationWatcher(updatePosition);
+         else
+           updatePosition('Geolocation API is NOT available');
 
          if ( navigator.wakeLock )
          {
@@ -118,6 +129,7 @@
 
   <body>
     <div id="title">Position Test</div>
+    <button id="startTrack">Allow Location Access</button>
     <div id="running"></div>
     <div id="lock"></div>
     <div id="posCount"></div>
