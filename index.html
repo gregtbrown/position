@@ -51,7 +51,22 @@
 
        function showOnMap()
        {
-         linker('https://maps.apple.com/?daddr=37.3318,-122.0311&dirflg=d');
+         // apple maps url:
+         //   saddr: source (defaults to current)
+         //   daddr: destination
+         //   dirflg: d=driving (default), w=walking, r=transit
+         //   t (map type): m=standard, k=satellite, h=hybrid
+
+         var url = 'https://maps.apple.com/?daddr=greensburg+pa&dirflg=d';
+
+         // google maps url:
+         //   max 23 waypoints
+         //   waypoints separated with '|' %7C
+         //   vias are: via:< the point> --> via%3A< the point>
+         //     e.g. pittsburgh|via:52.3676,4.9041|latrobe
+         //var url = 'https://www.google.com/maps/dir/?api=1&origin=Paris&destination=Berlin&waypoints=via:Brussels|Amsterdam&travelmode=driving';
+
+         linker(url);
        }
 
        async function share()
@@ -73,7 +88,7 @@
          }
          catch (err)
          {
-           // get an AbortError error if user cancels
+           // get an err.name==AbortError (code 20) error if user cancels
            document.getElementById('shareRes').textContent = `Error: code: ${err.code}, name: ${err.name}, msg: ${err.message}`;
          }
        }
