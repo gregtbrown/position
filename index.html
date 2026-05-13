@@ -320,6 +320,8 @@
          {
            str = `timestamp: ${pos.timestamp}<br>lat: ${pos.coords.latitude}<br>lng: ${pos.coords.longitude}<br>heading: ${pos.coords.heading}<br>speed: ${pos.coords.speed}<br>altitude: ${pos.coords.altitude}<br>accuracy: ${pos.coords.accuracy}<br>altitudeAccuracy: ${pos.coords.altitudeAccuracy}`;
            document.getElementById('posCount').innerHTML = 'Position updates: ' + ++posCount;
+
+           updateMapPos(pos);
          }
 
          document.getElementById('position').innerHTML = str;
