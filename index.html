@@ -36,6 +36,19 @@
            document.getElementById('share').addEventListener('click', share);
          else
            document.getElementById('share').style.visibility = 'hidden';
+
+         document.getElementById('loadFile').addEventListener('click', function()
+         {
+           loadJsonFile(function(data, fileName)
+           {
+             document.getElementById('loadFileRes').textContent = fileName;
+           });
+         });
+  
+
+         // TODO: only available in https
+         // maybe use this to send file to garmin
+         getSerialPorts();
        }
 
        function linker(url, type = 'text/plain')
@@ -47,6 +60,71 @@
          link.click();  // simulate clicking the link
 
          setTimeout(function() { URL.revokeObjectURL(link.href); }, 0);
+       }
+
+       // callback(data, fileName)
+       function uploadText(callback, fileTypes)
+       {
+         var link = document.getElementById('uploaderLink');
+
+         link.accept = fileTypes;
+         link.value = '';  // force a change in case we try to load the same file again (otherwise we don't get the onchange callback)
+
+         link.oncancel = function()
+         {
+           callback(null, null);
+         }
+
+         link.onchange = function()
+         {
+           var file = this.files[0];
+
+           //alert('Selected file: ' + file.name + '\nlength: ' + file.size + '\ntype: ' + file.type);
+
+           var oFReader = new FileReader();
+           oFReader.readAsText(file);
+           oFReader.onload = function (oFREvent)
+           {
+             var data = oFREvent.target.result;
+             callback(data, file.name);
+           }
+
+           oFReader.onerror = function (OFREvent)
+           {
+             alert("Error in reading");
+           }
+         };
+
+         link.click();  // simulate clicking loader link
+       }
+
+       // callback(data, fileName, ctx)
+       function loadJsonFile(callback, ctx)
+       {
+         uploadText(function(data, fileName)
+         {
+           data = parseJson(data);
+           callback(data, fileName, ctx);
+         }, ".json");
+       }
+
+       function parseJson(json)
+       {
+         var data;
+
+         try
+         {
+           data = JSON.parse(json);
+         } catch(e)
+         {
+           var errMsg = 'Error parsing JSON';
+           if ( e instanceof SyntaxError )
+             errMsg += ':\n\n' + e.message;
+           alert(errMsg);
+           data = null;
+         }
+
+         return data;
        }
 
        function showOnMap()
@@ -93,6 +171,21 @@
          }
        }
 
+       function getSerialPorts()
+       {
+         if ( navigator.serial )
+         {
+           navigator.serial.getPorts().then((ports) => {
+             document.getElementById('ports').textContent = ports;
+             console.log(ports);
+           });
+         }
+         else
+         {
+           document.getElementById('ports').textContent = 'serial ports not supported';
+         }
+       }
+
        function toggleGps()
        {
          if ( !running )
@@ -117,28 +210,9 @@
          }
        }
 
-       async function run()
-       {           
-
-         // TODO: add some other check for a location service that calls updatePosition()
-         // or inject another script as above
-/*
-         if ( typeof(otherLocationService) != 'undefined' )
-           otherLocationService(updatePosition);
-         else if ( navigator.geolocation )
-           locationWatcher(updatePosition);
-*/
-         // so we know the js is running
-         var count = 0;
-         setInterval(function()
-         {
-           document.getElementById('running').innerHTML = 'Interval Count: ' + count++;
-         }, 1000);
-
-         if ( 'geolocation' in navigator )
-           toggleGps();
-         else
-           updatePosition('Geolocation API is NOT available');
+       async function lockScreen()
+       {
+         // see for how to monitor state and explicitly release: https://developer.mozilla.org/en-US/docs/Web/API/WakeLockSentinel
 
          if ( navigator.wakeLock )
          {
@@ -156,7 +230,32 @@
              document.getElementById('lock').innerHTML = `${err.name}: ${err.message}`;
            }
          }
+       }
 
+       async function run()
+       {           
+
+         // TODO: add some other check for a location service that calls updatePosition()
+         // or inject another script as above
+/*
+         if ( typeof(otherLocationService) != 'undefined' )
+           otherLocationService(updatePosition);
+         else if ( navigator.geolocation )
+           locationWatcher(updatePosition);
+*/
+         // so we know the js is running
+         var count = 0;
+         setInterval(function()
+         {
+           document.getElementById('running').textContent = 'Interval Count: ' + count++;
+         }, 1000);
+
+         if ( 'geolocation' in navigator )
+           toggleGps();
+         else
+           updatePosition('Geolocation API is NOT available');
+
+         lockScreen();
        }
 
        function updatePosition(pos)
@@ -224,6 +323,7 @@
 
   <body>
     <a href="" id="linker" style="display:none"></a>
+    <input type="file" id="uploaderLink" style="display:none">
     <div id="title">Position Test</div>
     <button id="startTrack">Start GPS</button>
     <div id="running"></div>
@@ -232,7 +332,10 @@
     <div id="position"></div>
     <button id="map">Show on Map</button>
     <button id="share">Share</button>
+    <button id="loadFile">Load File</button>
+    <div id="loadFileRes"></div>
     <div id="shareRes"></div>
+    <div id="ports"></div>
   </body>
 </html>
     
