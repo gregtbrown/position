@@ -20,6 +20,69 @@
 
     <script>
 
+       class Compass
+       {
+         #enabled;
+         #callback;
+         #handlerWrapper;         
+
+         #handler(evt)
+         {
+           if ( !this.#callback )
+             return;
+             
+           // note:
+           //   event.beta: X axis tilt (front to back, flat or upright)
+           //   event.gamma: Y axis roll (landscape/portrait)
+           //   event.alpha: Z axis rotate (compass direction 0-360)
+           //   event.absolute: true if the device is providing absolute orientation (relative to the Earth's magnetic field)
+
+           // note: webkitCompassHeading is more accurate than alpha on iOS
+           const heading = evt.webkitCompassHeading || (360 - evt.alpha);
+
+           this.#callback({x: evt.beta, y: evt.gamma, z: heading, absolute: evt.absolute}); 
+         }
+
+         constructor()
+         {
+           this.#handlerWrapper = this.#handler.bind(this);
+         }
+         
+         // callback({x, y, z, absolute})
+         setCallback(callback)
+         {
+           this.#callback = callback;
+         }
+
+         async enable(_enable)
+         {
+           if ( _enable == this.#enabled )
+             return;
+
+           if ( this.#enabled )
+           {
+             removeEventListener('deviceorientation', this.#handlerWrapper);
+           }
+           else
+           {
+             // iOS 13+ Permission Request
+             if (typeof DeviceOrientationEvent.requestPermission === 'function')
+             {
+               const response = await DeviceOrientationEvent.requestPermission();
+               if (response !== 'granted')
+               {
+                 console.log('Compass: Permission denied');
+                 return false;
+               }
+             }
+
+             window.addEventListener('deviceorientation', this.#handlerWrapper, true);
+           }
+
+           this.#enabled = _enable;
+         }
+       }
+
        // wait for everything to load
        window.addEventListener('load', startup, true);
 
@@ -29,7 +92,9 @@
        var map;
        var curLocMarker;
        var os;
+       var compass = new Compass();
 
+       
        async function startup()
        {
          document.getElementById('startTrack').addEventListener('click', toggleGps);
@@ -91,6 +156,8 @@
          }).addTo(map);
        }
 
+       var prevHeading = 0;
+
        async function run()
        {           
          if ( 'geolocation' in navigator )
@@ -99,7 +166,22 @@
            updatePosition('Geolocation API is NOT available');
 
          //startAccel(); compass is more usefull in this case
-         enableCompass();
+
+         compass.setCallback(function(val)
+         {
+           var heading = val.z.toFixed(0);
+
+           if ( heading == prevHeading )
+             return;
+
+           prevHeading = heading;
+
+           document.getElementById('compass').textContent = 'Compass: ' + heading;
+           document.getElementById('map').style.transform = `rotate(${-heading}deg)`;
+         });
+
+         compass.enable(true);
+
          lockScreen();
        }
 
@@ -232,54 +314,17 @@
            watchId = null;
            document.getElementById('startTrack').innerHTML = 'Start GPS';
            updatePosition('');
+
+           compass.enable(false);
          }
          else
          {
            watchId = locationWatcher(updatePosition, parseInt(document.getElementById('maxAge').value));
            document.getElementById('startTrack').innerHTML = 'Stop GPS';
            updatePosition('waiting for location...');
+
+           compass.enable(true);
          }
-       }
-
-       // TODO: toggle
-       async function enableCompass()
-       {
-         // iOS 13+ Permission Request
-         if (typeof DeviceOrientationEvent.requestPermission === 'function')
-         {
-           const response = await DeviceOrientationEvent.requestPermission();
-           if (response !== 'granted')
-           {
-             document.getElementById('compass').textContent = 'Compass: Permission denied';
-             return;
-           }
-         }
-
-         //let lastHeading = 0;
-
-         window.addEventListener('deviceorientation', function(event)
-         {
-           // TODO:
-           //   event.alpha: Z axis rotate (compass direction 0-360)
-           //   event.gamma: Y axis roll (landscape/portrait)
-           //   event.beta: X axis tilt (front to back, flat or upright)
-           //   event.absolute: true if the device is providing absolute orientation (relative to the Earth's magnetic field)
-
-           // note: webkitCompassHeading is more accurate than alpha on iOS
-           const heading = event.webkitCompassHeading || (360 - event.alpha);
-
-           if ( heading )
-           {
-             // Basic smoothing formula
-             //const smoothing = 0.1; // Adjust between 0 and 1
-             //let smoothedHeading = lastHeading + (heading - lastHeading) * smoothing;
-
-             document.getElementById('compass').textContent = 'Compass: ' + heading;  // + ' (' + smoothedHeading + ')';
-             //lastHeading = smoothedHeading;
-
-             document.getElementById('map').style.transform = `rotate(${-heading}deg)`;
-           }
-         }, true);
        }
 
        // TODO: toggle
