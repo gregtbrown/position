@@ -24,9 +24,8 @@
        {
          #enabled;
          #callback;
-         #handlerWrapper;         
 
-         #handler(evt)
+         #handler = (evt) =>  // arrow function binds 'this'
          {
            if ( !this.#callback )
              return;
@@ -45,7 +44,6 @@
 
          constructor()
          {
-           this.#handlerWrapper = this.#handler.bind(this);
          }
          
          // callback({x, y, z, absolute})
@@ -66,7 +64,7 @@
 
            if ( this.#enabled )
            {
-             window.removeEventListener('deviceorientation', this.#handlerWrapper);
+             window.removeEventListener('deviceorientation', this.#handler, true);  // remove must have the same options
            }
            else
            {
@@ -81,7 +79,7 @@
                }
              }
 
-             window.addEventListener('deviceorientation', this.#handlerWrapper, true);
+             window.addEventListener('deviceorientation', this.#handler, true);
            }
 
            this.#enabled = _enable;
