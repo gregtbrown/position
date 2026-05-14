@@ -98,7 +98,7 @@
          else
            updatePosition('Geolocation API is NOT available');
 
-         startAccel();
+         //startAccel(); compass is more usefull in this case
          enableCompass();
          lockScreen();
        }
@@ -241,6 +241,7 @@
          }
        }
 
+       // TODO: toggle
        async function enableCompass()
        {
          // iOS 13+ Permission Request
@@ -258,8 +259,13 @@
 
          window.addEventListener('deviceorientation', function(event)
          {
-           // alpha is the compass direction (0-360)
-           // webkitCompassHeading is more accurate on iOS
+           // TODO:
+           //   event.alpha: Z axis rotate (compass direction 0-360)
+           //   event.gamma: Y axis roll (landscape/portrait)
+           //   event.beta: X axis tilt (front to back, flat or upright)
+           //   event.absolute: true if the device is providing absolute orientation (relative to the Earth's magnetic field)
+
+           // note: webkitCompassHeading is more accurate than alpha on iOS
            const heading = event.webkitCompassHeading || (360 - event.alpha);
 
            if ( heading )
@@ -270,10 +276,13 @@
 
              document.getElementById('compass').textContent = 'Compass: ' + heading;  // + ' (' + smoothedHeading + ')';
              //lastHeading = smoothedHeading;
+
+             document.getElementById('map').style.transform = `rotate(${-heading}deg)`;
            }
          }, true);
        }
 
+       // TODO: toggle
        async function startAccel()
        {
          // might work in chrome, but not in safari
@@ -327,6 +336,8 @@
          }
        }
 
+       // TODO: handle foreground detection (if we lose it on backgrounding) and/or disable
+       // probably have a separate ui button to toggle this
        async function lockScreen()
        {
          // see for how to monitor state and explicitly release: https://developer.mozilla.org/en-US/docs/Web/API/WakeLockSentinel
