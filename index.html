@@ -54,14 +54,19 @@
            this.#callback = callback;
          }
 
+         toggleEnable()
+         {
+           return this.enable(!this.#enabled);
+         }
+
          async enable(_enable)
          {
            if ( _enable == this.#enabled )
-             return;
+             return true;
 
            if ( this.#enabled )
            {
-             removeEventListener('deviceorientation', this.#handlerWrapper);
+             window.removeEventListener('deviceorientation', this.#handlerWrapper);
            }
            else
            {
@@ -80,8 +85,75 @@
            }
 
            this.#enabled = _enable;
+
+           return true;
          }
        }
+
+
+       class Gps
+       {
+         #enabled;
+         #id;
+         #maxAge;
+         #callback;
+
+         constructor(maxAge)
+         {
+           this.#maxAge = maxAge;
+         }
+
+         // callback(position)
+         setCallback(callback)
+         {
+           this.#callback = callback;
+         }
+
+         setMaxAge(maxAge)
+         {
+           this.#maxAge = maxAge;
+         }
+
+         toggleEnable()
+         {
+           return this.enable(!this.#enabled);
+         }
+
+         enable(_enable)
+         {
+           if ( _enable == this.#enabled )
+             return true;
+
+           if ( this.#enabled )
+           {
+             navigator.geolocation.clearWatch(this.#id);
+             this.#id = null;
+           }
+           else
+           {
+             if ( !('geolocation' in navigator) )
+               return false;
+
+             var options =
+             {
+               timeout: 30 * 1000,
+               maximumAge: this.#maxAge,
+               enableHighAccuracy: true,
+             };
+
+             this.#id = navigator.geolocation.watchPosition(
+               this.#callback,
+               function(error) { console.log('GPS:', err); },
+               options
+             );
+           }
+
+           this.#enabled = _enable;
+
+           return true;
+         }
+       }
+
 
        // wait for everything to load
        window.addEventListener('load', startup, true);
@@ -92,12 +164,14 @@
        var map;
        var curLocMarker;
        var os;
+       var prevHeading = 0;
        var compass = new Compass();
+       var gps = new Gps();
 
        
        async function startup()
        {
-         document.getElementById('startTrack').addEventListener('click', toggleGps);
+         document.getElementById('startTrack').addEventListener('click', toggleRun);
 
          document.getElementById('showOnMap').addEventListener('click', showOnMap);
 
@@ -156,33 +230,60 @@
          }).addTo(map);
        }
 
-       var prevHeading = 0;
-
-       async function run()
+       async function toggleRun()
        {           
-         if ( 'geolocation' in navigator )
-           toggleGps();
-         else
-           updatePosition('Geolocation API is NOT available');
-
          //startAccel(); compass is more usefull in this case
 
-         compass.setCallback(function(val)
+         function compassError()
          {
-           var heading = val.z.toFixed(0);
+           document.getElementById('compass').textContent = 'Error starting compass';
+         }
 
-           if ( heading == prevHeading )
-             return;
+         function gpsError()
+         {
+             updatePosition('error starting gps');
+         }           
 
-           prevHeading = heading;
+         if ( !running )
+         {
+           running = true;
 
-           document.getElementById('compass').textContent = 'Compass: ' + heading;
-           document.getElementById('map').style.transform = `rotate(${-heading}deg)`;
-         });
+           compass.setCallback(function(val)
+           {
+             var heading = val.z.toFixed(0);
 
-         compass.enable(true);
+             if ( heading == prevHeading )
+               return;
 
-         lockScreen();
+             prevHeading = heading;
+
+             document.getElementById('compass').textContent = 'Compass: ' + heading;
+             document.getElementById('map').style.transform = `rotate(${-heading}deg)`;
+           });
+
+           if ( !compass.enable(true) )
+             compassError();
+
+           gps.setCallback(function(val)
+           {
+             updatePosition(val);
+           });
+
+           if ( !gps.enable(true) )
+             gpsError();
+           else
+             updatePosition('waiting for location...');
+
+
+           lockScreen();
+         }
+         else
+         {
+           if ( !compass.toggleEnable() )
+             compassError();
+           if ( !gps.toggleEnable() )
+             gpsError();
+         }
        }
 
        function updateMapPos(pos)
@@ -299,6 +400,7 @@
          }
        }
 
+/*
        function toggleGps()
        {
          if ( !running )
@@ -326,6 +428,7 @@
            compass.enable(true);
          }
        }
+*/
 
        // TODO: toggle
        async function startAccel()
