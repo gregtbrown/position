@@ -28,8 +28,9 @@
        var watchId;
        var map;
        var curLocMarker;
+       var os;
 
-       function startup()
+       async function startup()
        {
          document.getElementById('startTrack').addEventListener('click', toggleGps);
 
@@ -50,12 +51,50 @@
            });
          });
   
+         os = await getMobileOS();
 
-         // TODO: only available in https
-         // maybe use this to send file to garmin
          getSerialPorts();
 
          initMap();
+       }
+
+       async function getMobileOS()
+       {
+         // 1. Try the Modern API (Chrome/Android/Edge)
+         if ( navigator.userAgentData )
+         {
+           try
+           {
+             const hints = await navigator.userAgentData.getHighEntropyValues(['platform']);
+
+             if (hints.platform === 'Android')
+               return 'android';
+             //if (hints.platform === "iOS")
+             //  return "iOS"; // Rare, but possible in future
+           }
+           catch (e)
+           {
+             // Fall through to legacy if API fails
+           }
+         }
+
+         // 2. Fallback to Legacy String (Safari/iOS/Firefox)
+         //const ua = navigator.userAgent;
+         const ua = navigator.userAgent || navigator.vendor || window.opera
+
+         // Windows Phone must come first because its UA also contains "Android"
+         if (/windows phone/i.test(ua))
+           return 'winphone';
+
+         if (/android/i.test(ua))
+           return 'android';
+
+         // Detailed iOS check (Includes iPadOS "Macintosh" fix)
+         if ( (/iPad|iPhone|iPod/.test(ua) && !window.MSStream) || 
+              (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1))
+           return 'ios';
+
+         return 'other';
        }
 
        function initMap()
@@ -179,14 +218,23 @@
          //   dirflg: d=driving (default), w=walking, r=transit
          //   t (map type): m=standard, k=satellite, h=hybrid
 
-         var url = 'https://maps.apple.com/?daddr=greensburg+pa&dirflg=d';
-
          // google maps url:
          //   max 23 waypoints
          //   waypoints separated with '|' %7C
          //   vias are: via:< the point> --> via%3A< the point>
          //     e.g. pittsburgh|via:52.3676,4.9041|latrobe
          //var url = 'https://www.google.com/maps/dir/?api=1&origin=Paris&destination=Berlin&waypoints=via:Brussels|Amsterdam&travelmode=driving';
+
+         var url;
+
+         // TODO: also based on setting (expicit or os default) and/or if this is a route or marker
+         // default for markers should be os default
+         // defaut for routes would depend on existence of waypoints since apple maps doesn't support them
+
+         if ( os == 'ios' )
+           url = 'https://maps.apple.com/?daddr=greensburg+pa&dirflg=d';
+         else
+           url = 'https://www.google.com/maps/dir/?api=1&origin=Paris&destination=Berlin&waypoints=via:Brussels|Amsterdam&travelmode=driving';
 
          linker(url);
        }
@@ -217,11 +265,13 @@
 
        function getSerialPorts()
        {
+         // TODO: only available in https?
+         // garmin doesn't show up as a serial port
+
          if ( navigator.serial )
          {
            navigator.serial.getPorts().then((ports) => {
-             document.getElementById('ports').textContent = ports;
-             console.log(ports);
+             document.getElementById('ports').textContent = ports.length ? ports : 'no serial ports available';
            });
          }
          else
@@ -248,7 +298,7 @@
          }
          else
          {
-           watchId = locationWatcher(updatePosition);
+           watchId = locationWatcher(updatePosition, document.getElementById('maxAge').value);
            document.getElementById('startTrack').innerHTML = 'Stop GPS';
            updatePosition('waiting for location...');
          }
@@ -278,15 +328,6 @@
 
        async function run()
        {           
-
-         // TODO: add some other check for a location service that calls updatePosition()
-         // or inject another script as above
-/*
-         if ( typeof(otherLocationService) != 'undefined' )
-           otherLocationService(updatePosition);
-         else if ( navigator.geolocation )
-           locationWatcher(updatePosition);
-*/
          // so we know the js is running
          var count = 0;
          setInterval(function()
@@ -327,7 +368,7 @@
          document.getElementById('position').innerHTML = str;
        }
 
-       function locationWatcher(updater)
+       function locationWatcher(updater, maxAge = 0)
        {
          const watchID = navigator.geolocation.watchPosition(
            function(position)
@@ -345,7 +386,7 @@
              //maximumAge: 5 * 1000,  // max cache time
              //timeout: 60 * 1000,
              timeout: 30 * 1000,
-             maximumAge: 0,            // Force fresh data
+             maximumAge: maxAge,            // Force fresh data
              enableHighAccuracy: true,
            }
          );
@@ -378,6 +419,7 @@
     <input type="file" id="uploaderLink" style="display:none">
     <div id="title">Position Test</div>
     <div id="map"></div>
+    <label>Max Position Age:<input id="maxAge" value="0"></label><br>
     <button id="startTrack">Start GPS</button>
     <div id="running"></div>
     <div id="lock"></div>
