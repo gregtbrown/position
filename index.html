@@ -176,7 +176,7 @@
          // TODO: only available in https
          // otherwise navigator.share is not a function
          if ( 'share' in navigator )
-           document.getElementById('share').addEventListener('click', share);
+           document.getElementById('share').addEventListener('click', function() { share('share some text', 'shared text'); });
          else
            document.getElementById('share').style.visibility = 'hidden';
 
@@ -230,18 +230,6 @@
 
        async function toggleRun()
        {           
-         //startAccel(); compass is more usefull in this case
-
-         function compassError()
-         {
-           document.getElementById('compass').textContent = 'Error starting compass';
-         }
-
-         function gpsError()
-         {
-             updatePosition('error starting gps');
-         }           
-
          if ( !running )
          {
            running = true;
@@ -267,21 +255,16 @@
              updatePosition(val);
            });
 
-           if ( !gps.enable(true) )
-             gpsError();
-           else
-             updatePosition('waiting for location...');
-
-
            lockScreen();
          }
-         else
-         {
-           if ( !compass.toggleEnable() )
-             compassError();
-           if ( !gps.toggleEnable() )
-             gpsError();
-         }
+
+         if ( !compass.toggleEnable() )
+           document.getElementById('compass').textContent = 'Error starting compass';
+
+         gps.setMaxAge(parseInt(document.getElementById('maxAge').value));
+
+         if ( !gps.toggleEnable() )
+           updatePosition('Error starting gps');
        }
 
        function updateMapPos(pos)
@@ -311,7 +294,7 @@
            str = pos;
          else
          {
-           str = `Position: ${++posCount}<br>timestamp: ${pos.timestamp}<br>lat: ${pos.coords.latitude}<br>lng: ${pos.coords.longitude}<br>heading: ${pos.coords.heading}<br>speed: ${pos.coords.speed}<br>altitude: ${pos.coords.altitude}<br>accuracy: ${pos.coords.accuracy}<br>altitudeAccuracy: ${pos.coords.altitudeAccuracy}`;
+           str = `Position: ${++posCount}<br>timestamp: ${pos.timestamp}<br>lat: ${pos.coords.latitude}<br>lng: ${pos.coords.longitude}<br>heading: ${pos.coords.heading}<br>speed: ${mpsToUiUnitStr(pos.coords.speed, 2)}<br>altitude: ${metersToUiUnitStr(pos.coords.altitude, 2, true)}<br>accuracy: ${metersToUiUnitStr(pos.coords.accuracy, 2, true)}<br>altitudeAccuracy: ${metersToUiUnitStr(pos.coords.altitudeAccuracy, 2, true)}`;
            updateMapPos(pos);
          }
 
@@ -369,17 +352,17 @@
          if ( os == 'ios' )
            url = 'https://maps.apple.com/?daddr=greensburg+pa&dirflg=d';
          else
-           url = 'https://www.google.com/maps/dir/?api=1&origin=Paris&destination=Berlin&waypoints=via:Brussels|Amsterdam&travelmode=driving';
+           url = 'https://www.google.com/maps/dir/?api=1&origin=latrobe,pa&destination=pittsburgh,pa&waypoints=via:greensburg,pa|irwin,pa&travelmode=driving';
 
          linker(url);
        }
 
-       async function share()
+       async function share(title, text)
        {
          // see: https://developer.mozilla.org/en-US/docs/Web/API/Navigator/share
          // can also share a url or files
 
-         var data = {title: 'share some text', text: 'shared text'};
+         var data = {title: title, text: text};
 
          try
          {
@@ -398,39 +381,18 @@
          }
        }
 
-/*
-       function toggleGps()
-       {
-         if ( !running )
-         {
-           running = true;
-           run();
-           return;
-         }
-
-         if ( watchId )
-         {
-           navigator.geolocation.clearWatch(watchId);
-           watchId = null;
-           document.getElementById('startTrack').innerHTML = 'Start GPS';
-           updatePosition('');
-
-           compass.enable(false);
-         }
-         else
-         {
-           watchId = locationWatcher(updatePosition, parseInt(document.getElementById('maxAge').value));
-           document.getElementById('startTrack').innerHTML = 'Stop GPS';
-           updatePosition('waiting for location...');
-
-           compass.enable(true);
-         }
-       }
-*/
-
        // TODO: toggle
        async function startAccel()
        {
+         function handleMotion(event)
+         {
+           var a = event.acceleration;
+           var ag = event.accelerationIncludingGravity;
+           var rr = event.rotationRate;
+           document.getElementById('accel').innerHTML = `Accelerometer:<br>interval: ${event.interval}<br>aX: ${a.x}, aY: ${a.y}, aZ: ${a.z}<br>agX: ${ag.x}, agY: ${ag.y}, agZ: ${ag.z}<br>rrX: ${rr.beta}, rrY: ${rr.gamma}, rrZ: ${rr.alpha}`;
+         }
+
+
          // might work in chrome, but not in safari
          /*
          if ('Accelerometer' in window)
@@ -448,14 +410,6 @@
            document.getElementById('accel').textXContent = 'Accelerometer not supported';
          }
          */
-
-         function handleMotion(event)
-         {
-           var a = event.acceleration;
-           var ag = event.accelerationIncludingGravity;
-           var rr = event.rotationRate;
-           document.getElementById('accel').innerHTML = `Accelerometer:<br>interval: ${event.interval}<br>aX: ${a.x}, aY: ${a.y}, aZ: ${a.z}<br>agX: ${ag.x}, agY: ${ag.y}, agZ: ${ag.z}<br>rrX: ${rr.beta}, rrY: ${rr.gamma}, rrZ: ${rr.alpha}`;
-         }
 
          if ( typeof DeviceMotionEvent.requestPermission === 'function' )
          {
@@ -619,6 +573,59 @@
          }
 
          return data;
+       }
+
+       const M_TO_MI = 0.000621371;  // convert meters to miles
+       const M_TO_FT = 3.28084;  // convert meters to feet
+       const M_TO_K = 0.001;  // convert meters to kilometers
+       const gPrefs = {units: 'm'};
+
+       function metersToMiles(value)
+       {
+         return value * M_TO_MI;
+       }
+
+       function mpsToMph(mps)
+       {
+         return Math.round(metersToMiles(mps) * 3600);
+       }
+
+       function metersToUiUnitStr(meters, places, small)
+       {
+         if ( !meters )
+           meters = 0;
+         if ( places == null )
+           places = 1;
+
+         if ( gPrefs.units == 'm' )
+         {
+           if ( !small && (meters * M_TO_MI < 0.25 ) )
+             small = true;
+           return small ? ''.concat((meters * M_TO_FT).toFixed(places), 'ft') : ''.concat((meters * M_TO_MI).toFixed(places), 'mi');
+         }
+
+         if ( !small && (meters * M_TO_K < 0.25) )
+           small = true;
+         return small ? ''.concat(meters.toFixed(places), 'm') : ''.concat((meters * M_TO_K).toFixed(places), 'K');
+       }
+
+       function mpsToUiUnitStr(metersPerSec, places, small)
+       {
+         if ( !metersPerSec )
+           metersPerSec = 0;
+         if ( places == null )
+           places = 1;
+
+         if ( gPrefs.units == 'm' )
+         {
+           if ( !small && mpsToMph(metersPerSec) < 5 )
+             small = true;
+           return small ? ''.concat((metersPerSec * M_TO_FT).toFixed(places), 'ft/s') : ''.concat(((metersPerSec * M_TO_MI) * 3600).toFixed(places), 'mph');
+         }
+
+         if ( !small && mpsToMph(metersPerSec) < 5 )
+           small = true;
+         return small ? ''.concat(metersPerSec.toFixed(places), 'mps') : ''.concat(((metersPerSec * M_TO_K) * 3600).toFixed(places), 'kph');
        }
 
     </script>
