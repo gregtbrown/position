@@ -56,7 +56,8 @@
 
          initMap();
 
-         lockScreen();
+         // needs user action in ios
+         //lockScreen();
 
          // so we know the js is running
          var count = 0;
@@ -98,7 +99,8 @@
            updatePosition('Geolocation API is NOT available');
 
          startAccel();
-//         lockScreen();
+         enableCompass();
+         lockScreen();
        }
 
        function updateMapPos(pos)
@@ -239,8 +241,43 @@
          }
        }
 
-       function startAccel()
+       async function enableCompass()
        {
+         // iOS 13+ Permission Request
+         if (typeof DeviceOrientationEvent.requestPermission === 'function')
+         {
+           const response = await DeviceOrientationEvent.requestPermission();
+           if (response !== 'granted')
+           {
+             document.getElementById('compass').textContent = 'Compass: Permission denied';
+             return;
+           }
+         }
+
+         let lastHeading = 0;
+
+         window.addEventListener('deviceorientation', function(event)
+         {
+           // alpha is the compass direction (0-360)
+           // webkitCompassHeading is more accurate on iOS
+           const heading = event.webkitCompassHeading || (360 - event.alpha);
+
+           if ( heading )
+           {
+             // Basic smoothing formula
+             const smoothing = 0.1; // Adjust between 0 and 1
+             let smoothedHeading = lastHeading + (heading - lastHeading) * smoothing;
+
+             document.getElementById('compass').textContent = 'Compass: ' + heading + ' (' + smoothedHeading + ')';
+             lastHeading = smoothedHeading;
+           }
+         }, true);
+       }
+
+       async function startAccel()
+       {
+         // might work in chrome, but not in safari
+         /*
          if ('Accelerometer' in window)
          {
            let sensor = new Accelerometer({frequency: 60});
@@ -254,6 +291,35 @@
          else
          {
            document.getElementById('accel').textXContent = 'Accelerometer not supported';
+         }
+         */
+
+         function handleMotion(event)
+         {
+           var a = event.acceleration;
+           var ag = event.accelerationIncludingGravity;
+           var rr = event.rotationRate;
+           document.getElementById('accel').textXContent = `interval: ${event.interval}<br>aX: ${a.x}, aY: ${a.y}, aZ: ${a.z}<br>agX: ${ag.x}, agY: ${ag.y}, agZ: ${ag.z}<br>rrX: ${rr.beta}, rrY: ${rr.gamma}, rrZ: ${rr.alpha}`;
+         }
+
+         if ( typeof DeviceMotionEvent.requestPermission === 'function' )
+         {
+           try
+           {
+             const permissionState = await DeviceMotionEvent.requestPermission();
+
+             if (permissionState === 'granted')
+               window.addEventListener('devicemotion', handleMotion);
+           }
+           catch (error)
+           {
+             document.getElementById('accel').textXContent = 'Accelerometer not supported';
+           }
+         }
+         else
+         {
+           // Non-iOS browsers usually don't require the explicit request
+           window.addEventListener('devicemotion', handleMotion);
          }
        }
 
@@ -428,6 +494,7 @@
     <div id="lock"></div>
     <div id="running"></div>
     <div id="accel"></div>
+    <div id="compass"></div>
     <div id="position"></div>
     <div id="loadFileRes"></div>
     <div id="shareRes"></div>
