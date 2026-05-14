@@ -57,6 +57,11 @@
            return this.enable(!this.#enabled);
          }
 
+         isEnabled()
+         {
+           return this.#enabled;
+         }
+
          async enable(_enable)
          {
            if ( _enable == this.#enabled )
@@ -117,6 +122,11 @@
            return this.enable(!this.#enabled);
          }
 
+         isEnabled()
+         {
+           return this.#enabled;
+         }
+
          enable(_enable)
          {
            if ( _enable == this.#enabled )
@@ -152,6 +162,87 @@
          }
        }
 
+/*
+// this version has stop(), which we want, also add a toggle()
+class WakeLockManager {
+    #wakeLock = null;
+
+    async requestLock() {
+        try {
+            // Request the wake lock
+            this.#wakeLock = await navigator.wakeLock.request('screen');
+
+            // 1. Detect when the lock is released (e.g., page hidden)
+            this.#wakeLock.addEventListener('release', () => {
+                console.log('Wake Lock was released');
+            });
+
+            console.log('Wake Lock is active');
+        } catch (err) {
+            console.error(`${err.name}, ${err.message}`);
+        }
+    }
+
+    // 2. Reacquire lock when page regains focus
+    handleVisibilityChange = async () => {
+        if (this.#wakeLock !== null && document.visibilityState === 'visible') {
+            await this.requestLock();
+        }
+    }
+
+    start() {
+        // Initial request
+        this.requestLock();
+        // Setup visibility listener
+        document.addEventListener('visibilitychange', this.handleVisibilityChange);
+    }
+
+    stop() {
+        document.removeEventListener('visibilitychange', this.handleVisibilityChange);
+        if (this.#wakeLock) {
+            this.#wakeLock.release();
+            this.#wakeLock = null;
+        }
+    }
+}
+
+// this version should have the correct state management
+class WakeLockManager {
+    #wakeLock = null;
+
+    async requestLock() {
+        // Don't request if we already have an active one
+        if (this.#wakeLock) return;
+
+        try {
+            this.#wakeLock = await navigator.wakeLock.request('screen');
+
+            // IMPORTANT: Clear the state when the browser kills the lock
+            this.#wakeLock.addEventListener('release', () => {
+                console.log('Wake Lock released by system');
+                this.#wakeLock = null; // Resetting state
+            });
+
+            console.log('Wake Lock acquired');
+        } catch (err) {
+            console.error(`Failed to lock: ${err.message}`);
+        }
+    }
+
+    handleVisibilityChange = async () => {
+        // Now this check is accurate: if it's null, we need to re-request
+        if (document.visibilityState === 'visible' && !this.#wakeLock) {
+            console.log('Page visible, re-acquiring lock...');
+            await this.requestLock();
+        }
+    }
+
+    start() {
+        document.addEventListener('visibilitychange', this.handleVisibilityChange);
+        this.requestLock();
+    }
+}
+*/
 
        // wait for everything to load
        window.addEventListener('load', startup, true);
@@ -197,11 +288,11 @@
          //lockScreen();
 
          // so we know the js is running
-         var count = 0;
-         setInterval(function()
-         {
-           document.getElementById('running').textContent = 'Idle Count: ' + count++;
-         }, 1000);
+         //var count = 0;
+         //setInterval(function()
+         //{
+         //  document.getElementById('running').textContent = 'Idle Count: ' + count++;
+         //}, 1000);
        }
 
        function initMap()
@@ -247,9 +338,6 @@
              document.getElementById('map').style.transform = `rotate(${-heading}deg)`;
            });
 
-           if ( !compass.enable(true) )
-             compassError();
-
            gps.setCallback(function(val)
            {
              updatePosition(val);
@@ -265,6 +353,11 @@
 
          if ( !gps.toggleEnable() )
            updatePosition('Error starting gps');
+
+         updatePosition(gps.isEnabled() ? 'waiting for GPS...' : '');
+         document.getElementById('startTrack').textContent = gps.isEnabled() ? 'Stop GPS' : 'Start GPS';
+
+         document.getElementById('compass').textContent = (compass.isEnabled() ? 'waiting for compass...' : '');
        }
 
        function updateMapPos(pos)
@@ -288,44 +381,30 @@
          //   heading: degrees CW from north (null if speed == 0)
          //   accuracy: meters
 
+         function fixedStr(val, places)
+         {
+           return val ? val.toFixed(places) : 0;
+         }
+
          var str;
 
          if ( typeof(pos) == "string" )
            str = pos;
          else
          {
-           str = `Position: ${++posCount}<br>timestamp: ${pos.timestamp}<br>lat: ${pos.coords.latitude}<br>lng: ${pos.coords.longitude}<br>heading: ${pos.coords.heading}<br>speed: ${mpsToUiUnitStr(pos.coords.speed, 2)}<br>altitude: ${metersToUiUnitStr(pos.coords.altitude, 2, true)}<br>accuracy: ${metersToUiUnitStr(pos.coords.accuracy, 2, true)}<br>altitudeAccuracy: ${metersToUiUnitStr(pos.coords.altitudeAccuracy, 2, true)}`;
+           str = `Position: ${++posCount}<br>`;
+           str += `timestamp: ${pos.timestamp}<br>`;
+           str += `speed: ${mpsToUiUnitStr(pos.coords.speed, 2)}<br>`;
+           str += `heading: ${fixedStr(pos.coords.heading, 2)}<br>`;
+           str += `lat: ${fixedStr(pos.coords.latitude, 5)}<br>lng: ${fixedStr(pos.coords.longitude, 5)}<br>`;
+           str += `altitude: ${metersToUiUnitStr(pos.coords.altitude, 2, true)}<br>`;
+           str += `accuracy: ${metersToUiUnitStr(pos.coords.accuracy, 2, true)}<br>`;
+           str += `altitudeAccuracy: ${metersToUiUnitStr(pos.coords.altitudeAccuracy, 2, true)}`;
+
            updateMapPos(pos);
          }
 
          document.getElementById('position').innerHTML = str;
-       }
-
-       function locationWatcher(updater, maxAge = 0)
-       {
-         var options =
-         {
-           timeout: 30 * 1000,
-           maximumAge: maxAge,            // Force fresh data
-           enableHighAccuracy: true,
-         };
-
-         const watchID = navigator.geolocation.watchPosition(
-           function(position)
-           {
-             //console.log('location:', position);
-             updater(position);
-           },
-           function on_error(error)
-           {
-             var err = 'Error (' + error.code + ') getting position: ' + error.message;
-             //console.log(err);
-             updater(err);
-           },
-           options
-         );
-         
-         return watchID;
        }
 
        function showOnMap()
